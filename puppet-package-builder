@@ -1,0 +1,41 @@
+#!/usr/bin/python
+import json
+import os
+
+# Configuration
+path = '/var/lib/jenkins/workspace/puppetlabs-apache/'
+json_file = path+'metadata.json'
+pkg_prefix = 'puppet-mod-'
+fpm_cmd = '/usr/local/bin/fpm'
+pkg_repo = '/etc/yum-repos/puppet-rpms/'
+
+if os.path.isfile(fpm_cmd):
+    print 'fpm is correctly installed, continue building process...'
+else:
+    print 'Could not find fpm command. Exiting script...'
+    exit()
+
+if os.path.isfile(json_file):
+    # Open json file and load values
+    json_data = open(json_file).read()
+    values = json.loads(json_data)
+
+    pkg_name = pkg_prefix+values['name']
+
+    #TODO: Add checks for every values
+    cmd = fpm_cmd+' -s dir -t rpm -n '+pkg_name+' --version '+values['version']+' --force --package '+pkg_repo
+    cmd += " --url '"+values['project_page']+"'"
+    cmd += " --maintainer '"+values['author']+"'"
+    # Dependencies between other modules
+    for i in range(0, len(values['dependencies'])) :
+        cmd += " --depends '"+values['dependencies'][i]['name'].replace('/', '-')+' '+values['dependencies'][i]['version_requirement']+"'"
+    cmd += ' '+path+'pkg/' #The directory to package. Get the dir/ and the .tar.gz
+
+    # Creating pkg/ directory with 'puppet module build' command
+    os.system('puppet module build '+path)
+    # Creating the package (deb/rpm) with fpm command prepared before
+    print 'Executing: '+cmd
+    os.system(cmd)
+else:
+    print 'Could not find '+json_file+' file. Exiting script'
+    exit()
