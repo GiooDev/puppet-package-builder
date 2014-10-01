@@ -1,41 +1,73 @@
 #!/usr/bin/python
 import json
 import os
+import sys
+import argparse
 
-# Configuration
-path = '/var/lib/jenkins/workspace/puppetlabs-apache/'
-json_file = path+'metadata.json'
-pkg_prefix = 'puppet-mod-'
-fpm_cmd = '/usr/local/bin/fpm'
-pkg_repo = '/etc/yum-repos/puppet-rpms/'
+## Configuration
+pkg_prefix = 'puppet-mod-' #The prefix of your packages
+pkg_repo = '/etc/yum-repos/puppet' #Where to build your packages
 
-if os.path.isfile(fpm_cmd):
-    print 'fpm is correctly installed, continue building process...'
+parser = argparse.ArgumentParser(description='This script allows you to automatically build packages from Puppet modules')
+parser.add_argument('-p', '--path', help='The path of the module to build', type=str)
+parser.add_argument('-t', '--type', help='The type of package you want to create (deb, rpm, tar)', type=str, choices=['deb', 'rpm', 'tar'])
+args = parser.parse_args()
+
+#If we get a path in parameter
+if args.path:
+    path = args.path #Then we set 
 else:
-    print 'Could not find fpm command. Exiting script...'
-    exit()
+    path = os.getcwd() #Unless, we get the current path
 
+#If we get a type parameter
+if args.type:
+    pkg_type = args.type
+else:
+    pkg_type = 'rpm' #By default we create rpms
+
+#We check if the directory where to build our packages exists
+pkg_repo += '/'+pkg_type #We create a repo for each type of packages
+if not os.path.isdir(pkg_repo):
+    os.makedirs(pkg_repo)
+
+# Check the correct installation of fpm
+fpm_cmd = '/usr/local/bin/fpm'
+if os.path.isfile(fpm_cmd):
+    print('fpm is correctly installed, continue building process...')
+else:
+    print('Could not find fpm command. Exiting script...')
+    os._exit(1)
+
+# Check the existence of the metadata.json file
+json_file = path+'/metadata.json'
 if os.path.isfile(json_file):
     # Open json file and load values
     json_data = open(json_file).read()
     values = json.loads(json_data)
 
+    # The complete package name with the prefix
     pkg_name = pkg_prefix+values['name']
 
     #TODO: Add checks for every values
-    cmd = fpm_cmd+' -s dir -t rpm -n '+pkg_name+' --version '+values['version']+' --force --package '+pkg_repo
+    cmd = fpm_cmd+' -s dir'
+    cmd += ' -n '+pkg_name
+    cmd += ' --version '+values['version']
+    cmd += ' --force'
+    cmd += ' -t '+pkg_type
+    cmd += ' --package '+pkg_repo
     cmd += " --url '"+values['project_page']+"'"
     cmd += " --maintainer '"+values['author']+"'"
     # Dependencies between other modules
+    #TODO: Review this part because on some puppet modules the version string is not correct
     for i in range(0, len(values['dependencies'])) :
-        cmd += " --depends '"+values['dependencies'][i]['name'].replace('/', '-')+' '+values['dependencies'][i]['version_requirement']+"'"
-    cmd += ' '+path+'pkg/' #The directory to package. Get the dir/ and the .tar.gz
+        cmd += " --depends '"+pkg_prefix+values['dependencies'][i]['name'].replace('/', '-')+' '+values['dependencies'][i]['version_requirement']+"'"
+    cmd += ' '+path+'/pkg/' #The directory to package. Get the dir/ and the .tar.gz
 
     # Creating pkg/ directory with 'puppet module build' command
     os.system('puppet module build '+path)
     # Creating the package (deb/rpm) with fpm command prepared before
-    print 'Executing: '+cmd
+    print('Executing: '+cmd)
     os.system(cmd)
 else:
-    print 'Could not find '+json_file+' file. Exiting script'
-    exit()
+    print('Could not find '+json_file+' file. Exiting script')
+    os._exit(1)
