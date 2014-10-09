@@ -9,10 +9,11 @@ import argparse
 pkg_prefix = 'puppet-mod-' #The prefix of your packages
 pkg_type = 'rpm' #By default we create rpms
 pkg_repo = '/etc/pkg_repos/puppet-mod' #Where to build your packages
-pkg_install_dir = '/usr/share/puppet/modules-repo' #Where to install the files
+pkg_install_dir = '/usr/share/puppet/modules-repo' #Where to install the file (.tar.gz)
 
 ## Parameters
 parser = argparse.ArgumentParser(description='This script allows you to automatically build packages from Puppet modules.')
+parser.add_argument('-v', '--verbose', help='Enable verbose output', action='store_true')
 parser.add_argument('-p', '--path', help='The path of the module to build (default: current dir)', type=str)
 parser.add_argument('--prefix', help='The prefix given to your package (default: '+pkg_prefix+')', type=str)
 parser.add_argument('-t', '--type', help='The type of package you want to create (deb, rpm, tar) (default: '+pkg_type+')', type=str, choices=['deb', 'rpm', 'tar'])
@@ -45,9 +46,10 @@ if not os.path.isdir(pkg_repo):
     os.makedirs(pkg_repo)
 
 # Check the correct installation of fpm
-fpm_cmd = '/usr/local/bin/fpm'
-if os.path.isfile(fpm_cmd):
-    print('fpm is correctly installed, continue building process...')
+fpm_bin = '/usr/local/bin/fpm'
+if os.path.isfile(fpm_bin):
+    if args.verbose:
+        print('fpm is correctly installed, continue building process...')
 else:
     print('Could not find fpm command. Exiting script...')
     os._exit(1)
@@ -75,28 +77,31 @@ if os.path.isfile(json_file):
     os.system('cp '+ori_tar_module+' '+tmp_install_dir)
 
     #TODO: Add checks for every values
-    cmd = fpm_cmd+' -s dir'                #the package type to use as input
-    cmd += ' -n '+pkg_name                 #the name to give to the package
-    cmd += ' --version '+values['version'] #the version to give to the package
-    cmd += ' -t '+pkg_type                 #the expected package type (rpm, deb, tar)
-    cmd += ' --package '+pkg_repo          #The package file path to output
-    cmd += ' -C '+path+'/pkg/'             #Change directory to here before searching for files
-    cmd += ' --force'                      #overwrite if the package already exist
-    cmd += " --url '"+values['project_page']+"'"
-    cmd += " --maintainer '"+values['author']+"'"
+    fpm_cmd = fpm_bin+' -s dir'                #the package type to use as input
+    fpm_cmd += ' -n '+pkg_name                 #the name to give to the package
+    fpm_cmd += ' --version '+values['version'] #the version to give to the package
+    fpm_cmd += ' -t '+pkg_type                 #the expected package type (rpm, deb, tar)
+    fpm_cmd += ' --package '+pkg_repo          #The package file path to output
+    fpm_cmd += ' -C '+path+'/pkg/'             #Change directory to here before searching for files
+    fpm_cmd += ' --force'                      #overwrite if the package already exist
+    fpm_cmd += " --url '"+values['project_page']+"'"
+    fpm_cmd += " --maintainer '"+values['author']+"'"
+    if args.verbose:
+        fpm_cmd += ' --verbose'
     # Dependencies between other modules
     #TODO: Review this part because on some puppet modules the version string is not correct
     for i in range(0, len(values['dependencies'])) :
         cmd += " --depends '"+pkg_prefix+values['dependencies'][i]['name'].replace('/', '-')+' '+values['dependencies'][i]['version_requirement']+"'"
     #We get the first directory from the pkg_install_dir
     if pkg_install_dir[0] == os.sep:
-        cmd += ' '+pkg_install_dir.split(os.sep)[1] #The directory to package
+        fpm_cmd += ' '+pkg_install_dir.split(os.sep)[1] #The directory to package
     else:
-        cmd += ' '+pkg_install_dir.split(os.sep)[0] #The directory to package
+        fpm_cmd += ' '+pkg_install_dir.split(os.sep)[0] #The directory to package
 
     # Creating the package (deb/rpm) with fpm command prepared before
-    print('Executing: '+cmd)
-    os.system(cmd)
+    if args.verbose:
+        print('Executing: '+fpm_cmd)
+    os.system(fpm_cmd)
 
     # Cleaning tmp elements
     os.remove(tmp_install_dir+'/'+tar_name)
