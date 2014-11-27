@@ -1,4 +1,12 @@
 #!/usr/bin/python
+# -*- coding: utf8 -*-
+"""
+Author : Julien Georges
+Project : https://github.com/GiooDev/box
+Date : October 2014
+Description : Allow you to build a package (rpm/deb) from a standard Puppet module.
+  The script will automatically get the informations from metadata.json file to build the package.
+"""
 import json
 import os
 import sys
